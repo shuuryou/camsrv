@@ -1,0 +1,190 @@
+#!/usr/bin/env php
+<?php
+require_once('/opt/camsrv/boilerplate.php');
+
+$sem = sem_get(63474, 1);
+if (!sem_acquire($sem, TRUE))
+{
+	Msg('Already running. Aborted.');
+	exit();
+}
+
+$cameras = Setting('camsrvd.cameras');
+$cameras = array_filter(explode(',', $cameras), 'strlen');
+
+$mdetect = Setting('camsrv.mdetect');
+$mdetect_cache_file = Setting('camsrv.mdetectcache');
+
+if (!file_exists($mdetect) || empty($mdetect_cache_file))
+{
+	Msg('Motion detection is disabled.');
+	$mdetect = false;
+}
+else
+{
+	$mdetectargs = Setting('camsrv.mdetectargs', '');
+	
+	if (!file_exists($mdetect_cache_file))
+		$mdetect_cache = array();
+	else
+		$mdetect_cache = unserialize($mdetect_cache_file);
+}
+
+foreach ($cameras as $cam)
+{
+	$retain = intval(Setting($cam .'.retaindays'));
+
+	if ($retain <= 0)
+	{
+		Msg('Setting "'. $cam .'.retaindays" is invalid. Not removing old recordings.');
+		continue;
+	}
+	
+	$cutoff = strtotime('0:00', time() - (86400 * $retain));
+	$dir = Setting($cam .'.destination');
+	
+	clean_directory($dir, $cutoff);
+	
+	if (!$mdetect)
+		continue;
+	
+	$mdetectextraargs = Setting($cam .'.mdetectextraargs', '');
+	
+	motion_detection($dir, $mdetect, trim($mdetectargs .' '. $mdetectextraargs), $mdetect_cache);
+}
+
+if ($mdetect)
+{
+	$fp = fopen($cache_file, 'c');
+
+	if (!flock($fp, LOCK_EX))
+	{
+		Msg('Could not lock cache file.');
+	}
+	else
+	{
+		ftruncate($fp, 0);
+		fwrite($fp, serialize($mdetect_cache));
+		fflush($fp);
+		flock($fp, LOCK_UN);
+	}
+
+	fclose($fp);
+}
+
+function motion_detection($dir, $detector, $detector_args, array &$cache)
+{
+	foreach ($cache as $k => $v)
+	{
+		if (!file_exists($k))
+			unset($k);
+	}
+	
+	$dh = opendir($dir);
+
+	if ($dh === FALSE)
+	{
+		Msg('Could not open directory "%s" for motion detection.', $dir);
+		continue;
+	}
+	
+	$processed = 0;
+	$timer = time();
+	
+	for (;;)
+	{
+		$current = readdir($dh);
+
+		if ($current === FALSE) break;
+		if ($current === '.' || $current === '..') continue;	
+
+		$current = $dir .'/'. $current;
+		
+		if (is_link($current))
+		{
+			Msg('SYMBOLIC LINK DETECTED AND SKIPPED: "%s"', $current);
+			continue;
+		}
+
+		if (is_dir($current)) motion_detection($current, $detector, $cache);
+
+		$mtime = filemtime($current);
+		if (time() - $mtime < 5) continue; // File being written to
+		
+		$tmpargs = str_replace($detector_args, '{RECORDING}', escapeshellarg($current));
+		
+		$cmd = sprintf('%s %s', $detector, $tmpargs);
+		$ret = -1;
+		$out = NULL;
+		exec($cmd, $out, $ret);
+		$processed++;
+
+		if ($ret == 0) // File does not have motion
+			continue;
+			
+		if ($ret == 1)
+		{
+			// Currently we do not care about motion offsets, but we can use
+			// the number of offsets as a rough indicator of how much movement
+			// is in the recording.
+			$cache[$current] = substr_count($out, "\n");
+			continue;
+		}
+		
+		Msg('Motion detection command "%s" returned unknown code %d.', $cmd, $ret);
+		Msg('Output: %s', $out);
+	}
+
+	closedir($dh);
+	
+	$timer = time() - $timer;
+	$average = $timer / $processed;
+	
+	Msg('Performed motion detection of %d files in directory "%s" in %d seconds (avg. %d sec. per file).', $processed, $dir, $timer, $average);
+}
+
+function clean_directory($dir, $cutoff)
+{
+	$dh = opendir($dir);
+
+	if ($dh === FALSE)
+	{
+		Msg('Could not open directory "%s" for cleaning.', $dir);
+		continue;
+	}
+	
+	for (;;)
+	{
+		$current = readdir($dh);
+
+		if ($current === FALSE) break;
+		if ($current === '.' || $current === '..') continue;	
+
+		$current = $dir .'/'. $current;
+		
+		if (is_link($current))
+		{
+			Msg('SYMBOLIC LINK DETECTED AND SKIPPED: "%s"', $current);
+			continue;
+		}
+		
+		if (is_dir($current)) Clean($current, $Cutoff);
+			
+		$mtime = filemtime($current);
+		if ($mtime > $Cutoff) continue;
+		
+		$created = date('Y-M-d H:i:s', $mtime);
+		
+		if (unlink($current))
+			Msg('Old file "%s" created %s was removed.', $current, $created);
+		else
+			Msg('Old file "%s" created %s could not be removed.', $current, $created);
+	}
+
+	closedir($dh);
+}
+
+function Msg($format, ...$params)
+{
+	vprintf($format.PHP_EOL, $params);
+}
