@@ -3,13 +3,12 @@
  *
  */
 
-#include <camsrvd.hpp>
+#include "camsrvd.hpp"
 
 int		m_LoggerPipe[2];
 pid_t	m_LoggerPID;
 
 string	m_MailTo;
-string 	m_SendMsg;
 string	m_CommandTpl;
 string	m_FilenameTpl;
 
@@ -33,7 +32,24 @@ int main(int argc, const char* argv[])
 
 	become_daemon();
 
-	check_if_running_and_lock();
+	// Unfortunately we can only create a lock file after we
+	// have become a daemon, since the checking and creating
+	// operation is an atomic operation to avoid race conditions.
+	int lock_status = check_if_running_and_lock(LOCKFILE);
+
+	switch (lock_status)
+	{
+		case -2:
+			abort(); // Must never happen
+		case -1:
+			posix_fail("Could not create lock file.", true);
+		case  1: 
+			fprintf(stderr, "Another instance is already running.\n");
+			exit(1);
+		case  0:
+			// Happy days.
+			break;
+	}
 
 	// Required for infinite sleep
 	sigset_t empty_signalset;
@@ -46,128 +62,144 @@ int main(int argc, const char* argv[])
 	{
 		printf("Starting camera \"%s\".\n", cam->name.c_str());
 
-		cam->pid = run_process(cam->command);
-		cam->errcount = 0;
-		cam->disabled = false;
 		cam->laststart = time(NULL);
+		cam->pid = run_process(cam->command);
 	}
 
 	printf("Starting command monitoring.\n");
 
-	do
+	while (!TERMINATE)
 	{
 		bool all_cameras_disabled = true;
-		bool may_suspend = true;
+		unsigned int sleep_time = 0;
 
 		for (vector<camera>::iterator cam = m_Cameras.begin() ; cam != m_Cameras.end(); ++cam)
 		{
 			if (cam->disabled)
-				continue;
+				continue; // for
 
-			all_cameras_disabled = false;
+			time_t now = time(NULL);
 
-			if (cam->pid == -1 || kill(cam->pid, 0) == -1)
+			if (!cam->resetting && (cam->pid == -1 || kill(cam->pid, 0) == -1))
 			{
-				may_suspend = false;
 				cam->errcount++;
 
 				printf("Camera \"%s\" with PID %d is no longer running. It has termined unexpectedly %d time(s) before.\n",
 					cam->name.c_str(), cam->pid, cam->errcount);
-
-				sleep(m_ResetTimer);
-
-				if (cam->errcount > m_MaxFailures)
+				
+				if (cam->errcount >= m_MaxFailures)
 				{
 					cam->disabled = true;
 					printf("Camera \"%s\" has failed too many times and has been disabled.\n", cam->name.c_str());
+					notify_camera_disabled(*cam);
+					
+					continue; // for
 				}
-				else
-				{
-					printf("Attempting to recover camera \"%s\"...\n", cam->name.c_str());
-					cam->pid = run_process(cam->command);
-					cam->laststart = time(NULL);
-				}
+				
+				cam->resetting = true;
+				cam->lastreset = time(NULL);
 			}
-			else if (cam->errcount != 0)
+			else if (cam->resetting && now - cam->lastreset >= m_ResetTimer)
 			{
-				may_suspend = false;
-				time_t now = time(NULL);
-
-				if (now - cam->laststart > m_ResetTimer)
-				{
-					printf("Camera \"%s\"appears to be working fine again, so resetting error count.\n", cam->name.c_str());
-					cam->errcount = 0;
-				}
+				assert(cam->lastreset != (time_t)-1);
+				
+				printf("Attempting to recover camera \"%s\"...\n", cam->name.c_str());
+				cam->laststart = now;
+				cam->resetting = false;
+				cam->lastreset = (time_t)-1;
+				cam->pid = run_process(cam->command);
+			}
+			else if (cam->errcount != 0 && (now - cam->laststart >= m_ResetTimer))
+			{
+				printf("Camera \"%s\"appears to be working fine again, so resetting error count.\n", cam->name.c_str());
+				cam->errcount = 0;
+			}
+			
+			all_cameras_disabled = false;
+			
+			if (cam->resetting || cam->errcount != 0)
+			{
+				// Figure out how long to sleep until something needs to
+				// be reset or restarted.
+				unsigned int tmp;
+				
+				if (cam->resetting)
+					tmp = (unsigned int)(m_ResetTimer - (now - cam->lastreset));
+				else if (cam->errcount != 0)
+					tmp = (unsigned int)(m_ResetTimer - (now - cam->laststart));
+				
+				if (sleep_time == 0)
+					sleep_time = tmp;
+				else
+					sleep_time = min(sleep_time, tmp);
 			}
 		}
 
 		if (all_cameras_disabled)
 		{
-			printf("All cameras have become disabled. There is nothing left to do. Terminating.\n");
-			break;
+			printf("All cameras have become disabled. There is nothing left to do.\n");
+			break; // while
 		}
-
-		// Wait for something to do. If we must reset the error count, we may only
-		// sleep for a limited time. Otherwise, we can sleep indefinitely.
-		if (!may_suspend)
+		
+		if (sleep_time == 0)
 		{
-			sleep(60);
-			goto end;
-		}
-
-		printf("Suspending until something happens.\n");
-		sigsuspend(&empty_signalset);
-		printf("Something has happened.\n");
-
-	end:
-		if (TERMINATE)
-			break;
-
-	} while (true);
-
-	bool do_kill = false;
-
-again:
-	bool repeat = false;
-
-	for (vector<camera>::iterator cam = m_Cameras.begin() ; cam != m_Cameras.end(); ++cam)
-	{
-		if (cam->disabled)
-			continue;
-
-		if (cam->pid == -1 || kill(cam->pid, 0) == -1)
-			continue; // Not running
-
-		if (do_kill)
-		{
-			printf("Killing camera \"%s\" process with PID %d.\n", cam->name.c_str(), cam->pid);
-
-			if (kill(cam->pid, SIGKILL) == -1)
-				posix_fail("Unable to kill process.", false);
+			printf("Suspending until something happens.\n");
+			sigsuspend(&empty_signalset);
+			printf("Something has happened.\n");
 		}
 		else
 		{
-			printf("Terminating camera \"%s\" process with PID %d.\n", cam->name.c_str(), cam->pid);
-
-			if (kill(cam->pid, SIGTERM) == -1)
-				posix_fail("Unable to terminate process.", false);
+			printf("Sleeping for %d seconds or less.\n", sleep_time);
+			sleep(sleep_time); 
+			printf("Woke up from sleep.\n");
 		}
-
-		repeat = true;
 	}
 
-	if (repeat && !do_kill)
+	// Terminate processes, wait 5 seconds, then try to kill remaining
+	// processes up to 10 times, waiting 5 seconds between attempts.
+	bool send_sigkill = false;
+	bool terminated_something;
+	
+	for (int sentinel = 10; sentinel >= 0; sentinel--)
 	{
-		repeat = false;
-		do_kill = true;
+		terminated_something = false;
+		
+		for (vector<camera>::iterator cam = m_Cameras.begin() ; cam != m_Cameras.end(); ++cam)
+		{
+			if (cam->disabled)
+				continue; // for
 
+			if (cam->pid == -1 || kill(cam->pid, 0) == -1) // Not running
+				continue; // for
+
+			if (send_sigkill)
+			{
+				printf("Killing camera \"%s\" process with PID %d.\n", cam->name.c_str(), cam->pid);
+
+				if (kill(cam->pid, SIGKILL) == -1)
+					posix_fail("Unable to kill process.", false);
+			}
+			else
+			{
+				printf("Terminating camera \"%s\" process with PID %d.\n", cam->name.c_str(), cam->pid);
+
+				if (kill(cam->pid, SIGTERM) == -1)
+					posix_fail("Unable to terminate process.", false);
+			}
+			
+			terminated_something = true;
+		}
+		
+		if (!terminated_something) // We are done!
+			break; // for
+		
 		printf("Giving all camera processes some time to exit.\n");
-		uint remaining = 5;
 
-		while (remaining > 0)
+		for (uint remaining = 5; remaining > 0;)
 			remaining = sleep(remaining);
-
-		goto again;
+		
+		 // If we sent SIGTERM, the next round is with SIGKILL
+		if (!send_sigkill) send_sigkill = true;
 	}
 
 	printf("Terminating.\n");
@@ -177,35 +209,62 @@ again:
 
 void notify_camera_disabled(const camera camdis)
 {
-	pid_t pid = fork();
+	// The following was shoplifted from the mdadm version 4.0
+	// "Monitor.c" file (static void alert). I therefore assume
+	// that the code is solid.
 
+	pid_t pid = fork();
+	
 	if (pid == -1)
 	{
-		posix_fail("Could not fork to execute message sending program.", false);
+		posix_fail("Could not fork to execute sendmail.", false);
 		return;
 	}
-
+	
 	if (pid == 0)
 	{
 		/* Child here */
-		int ret = execl(m_SendMsg.c_str(), m_SendMsg.c_str(),
-			m_MailTo.c_str(), camdis.name.c_str(), camdis.command.c_str(), NULL);
 
-		if (ret == -1)
-			posix_fail("Executing for message sending program failed.", false);
+		FILE *mp = popen(SENDMAIL_EXECUTABLE, "w");
+
+		if (!mp)
+			posix_fail("Could not execute sendmail to send an alert.", true);
+
+		signal(SIGPIPE, SIG_IGN);
+		
+		char hname[256];
+		gethostname(hname, sizeof(hname));
+
+		fprintf(mp, "From: CamSrv <root>\n");
+		fprintf(mp, "To: %s\n", m_MailTo.c_str());
+		fprintf(mp, "Subject: Problem with camera \"%s\" on host \"%s\"\n\n",
+			camdis.name.c_str(), hname);
+
+		fprintf(mp, "This is an automatically generated notification from camsrvd running on \"%s\".\n\n", hname);
+		fprintf(mp, "The following camera has been disabled because its command has failed too many times:\n\n");
+
+		fprintf(mp, "%s\n", camdis.name.c_str());
+		fprintf(mp, "%s\n\n", camdis.command.c_str());
+
+		fprintf(mp, "You may wish to investigate what is going on. Further information might be available in the syslog.\n\n");
+		fprintf(mp, "Apologies for any inconvenience this may cause. For resolving any issues I can only say, Godspeed.\n");
+
+		pclose(mp);
+		
+		exit(0);
 	}
-
+	
 	/* Parent here */
 	int retval;
 	waitpid(pid, &retval, 0);
 
 	if (retval != 0)
 	{
-		fprintf(stderr, "Unable to send notification. Message sending program returned %d.\n", retval);
+		fprintf(stderr, "Unable to send notification. Sendmail returned %d.\n", retval);
 		return;
 	}
 
-	printf("Successfully sent notification. Message sending program returned %d.\n", retval);
+	printf("Successfully sent notification. Sendmail returned %d.\n", retval);
 }
 
 void load_settings(const string& filename)
@@ -234,7 +293,6 @@ void load_settings(const string& filename)
 	try
 	{
 		m_MailTo = pt.get<string>("camsrvd.mailto");
-		m_SendMsg = pt.get<string>("camsrvd.sendmsg");
 		m_CommandTpl = pt.get<string>("camsrvd.commandtpl");
 		m_FilenameTpl = pt.get<string>("camsrvd.filenametpl");
 
@@ -250,7 +308,6 @@ void load_settings(const string& filename)
 	}
 
 	trim(m_MailTo);
-	trim(m_SendMsg);
 	trim(m_CommandTpl);
 	trim(m_FilenameTpl);
 
@@ -260,45 +317,25 @@ void load_settings(const string& filename)
 
 	split(cameras_split, cameras, bind1st(equal_to<char>(), ','), token_compress_on);
 
-	if (m_MailTo.length() == 0)
+	if (m_MailTo.empty())
 	{
 		fprintf(stderr, "Configuration is invalid! Reason: missing mail recipient.");
 		exit(1);
 	}
-	else if (m_SendMsg.length() == 0)
+	else if (m_CommandTpl.empty())
 	{
 		fprintf(stderr, "Configuration is invalid! Reason: missing command template.");
 		exit(1);
 	}
-	else if (m_CommandTpl.length() == 0)
-	{
-		fprintf(stderr, "Configuration is invalid! Reason: missing command template.");
-		exit(1);
-	}
-	else if (m_FilenameTpl.length() == 0)
+	else if (m_FilenameTpl.empty())
 	{
 		fprintf(stderr, "Configuration is invalid! Reason: missing filename template.");
 		exit(1);
 	}
-	else if (cameras.length() == 0 || cameras_split.size() < 1)
+	else if (cameras.empty() || cameras_split.size() < 1)
 	{
 		fprintf(stderr, "Configuration is invalid! Reason: must declare at least one camera.");
 		exit(1);
-	}
-
-	if (!filesystem::exists(m_SendMsg))
-	{
-		fprintf(stderr, "Configuration is invalid! Reason: Message sending program not found.");
-		exit(1);
-	}
-
-	{
-		struct stat st;
-		if (stat(m_SendMsg.c_str(), &st) < 0 || (st.st_mode & S_IEXEC) == 0)
-		{
-			fprintf(stderr, "Configuration is invalid! Reason: Message sending program not executable.");
-			exit(1);
-		}
 	}
 
 	for (vector<string>::iterator el = cameras_split.begin() ; el != cameras_split.end(); ++el)
@@ -341,6 +378,12 @@ void load_settings(const string& filename)
 		cam.command = m_CommandTpl;
 		replace_all(cam.command, "{STREAM}", "\"" + stream + "\"");
 		replace_all(cam.command, "{DESTINATION}", "\"" + destination + "\"");
+		cam.pid = (pid_t)-1;
+		cam.errcount = 0;
+		cam.disabled = false;
+		cam.resetting = false;
+		cam.lastreset = (time_t)-1;
+		cam.laststart = (time_t)-1; 
 
 		m_Cameras.push_back(cam);
 	}
@@ -380,51 +423,9 @@ void handle_signal(int signum)
 			while((pid = waitpid(-1, &retval, WNOHANG)) > 0);
 			break;
 		case SIGUSR1:
-			/* Reserved */
+			output_statistics();
 			break;
 	}
-}
-
-void check_if_running_and_lock()
-{
-	int fd = open(LOCKFILE, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-
-	if (fd < 0)
-		posix_fail("Unable to open lock file.", true);
-
-	struct flock fl;
-
-	fl.l_type = F_WRLCK;
-	fl.l_start = 0;
-	fl.l_whence = SEEK_SET;
-	fl.l_len = 0;
-
-	if (fcntl(fd, F_SETLK, &fl) < 0)
-	{
-		if (errno == EACCES || errno == EAGAIN)
-		{
-			close(fd);
-			fprintf(stderr, "Another instance is already running.\n");
-			exit(1);
-		}
-
-		posix_fail("Could not acquire lock on lock file.", true);
-	}
-
-	char pid[16];
-	ftruncate(fd, 0);
-	sprintf(pid, "%ld\n", (long)getpid());
-	write(fd, pid, strlen(pid));
-
-	atexit(delete_lockfile);
-}
-
-void delete_lockfile()
-{
-	if (!filesystem::exists(LOCKFILE))
-		return;
-
-	unlink(LOCKFILE);
 }
 
 void become_daemon()
@@ -541,8 +542,11 @@ void redirect_output_to_logger()
 		dup2(m_LoggerPipe[0], STDIN_FILENO); // Child's stdin becomes the pipe
 		close(m_LoggerPipe[0]); // OK as parent still has it open
 
-		if (execl(LOGGER_EXECUTABLE, LOGGER_EXECUTABLE, "-t", LOGGER_TOPIC, NULL) == -1)
+		if (execl(LOGGER_EXECUTABLE, LOGGER_EXECUTABLE,
+			"-t", LOGGER_TAG, "-p", LOGGER_PRIORITY, NULL) == -1)
+		{
 			posix_fail("Starting logger failed.", true);
+		}
 	}
 
 	/* Parent here */
@@ -571,16 +575,37 @@ void close_logger()
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
 
-	waitpid(m_LoggerPID, &ret, 0); // Logger exists once its stdin closes
+	waitpid(m_LoggerPID, &ret, 0); // Logger exits once its stdin closes
 
 	// stdout and stderr are still closed from here. Caller has to fix this.
+}
+
+void output_statistics()
+{
+	char buf[255], buf2[255];
+	struct tm *info;
+	
+	for (vector<camera>::iterator cam = m_Cameras.begin() ; cam != m_Cameras.end(); ++cam)
+	{
+		info = localtime(&cam->lastreset);
+		strftime(buf, 255,"%x %X", info);
+		
+		info = localtime(&cam->laststart);
+		strftime(buf2, 255,"%x %X", info);
+		
+		printf("Camera \"%s\" - Command: \"%s\", PID: %d, Error count: %d, Disabled? %s, Resetting? %s, Last reset: %s, Last start: %s.\n",
+			cam->name.c_str(), cam->command.c_str(), cam->pid, cam->errcount,
+			cam->disabled ? "Yes" : "No",
+			cam->resetting ? "Yes" : "No",
+			buf, buf2);
+	}
 }
 
 pid_t run_process(string cmdline)
 {
 	// Run a process in the background and return its PID.
 
-	if (cmdline.length() == 0)
+	if (cmdline.empty())
 	{
 		fprintf(stderr, "Refusing to run an empty command line.");
 		return -1;
@@ -634,6 +659,7 @@ pid_t run_process(string cmdline)
 void posix_fail(string why, bool terminate)
 {
 	// Deal with all the stupid UNIX API calls that can fail.
+	// This is a lot like those dumb VB6 error handlers.
 
 	if (errno == 0)
 		return;
@@ -643,4 +669,3 @@ void posix_fail(string why, bool terminate)
 	if (terminate)
 		exit(1);
 }
-

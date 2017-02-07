@@ -7,27 +7,15 @@
 #define CAMSRVD_HPP
 
 #include <algorithm>
-#include <iostream>
-#include <fstream>
-#include <vector>
-
-#include <errno.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 #include <sys/resource.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 
-#include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+
+#include "locking.hpp"
 
 extern "C"
 {
@@ -38,8 +26,11 @@ using namespace std;
 using namespace boost;
 
 #define LOGGER_EXECUTABLE "/usr/bin/logger"
-#define LOGGER_TOPIC "camsrvd"
+#define LOGGER_TAG "camsrvd"
+#define LOGGER_PRIORITY "user.notice"
 #define LOCKFILE "/var/run/camsrvd.pid"
+
+#define SENDMAIL_EXECUTABLE "/usr/lib/sendmail -t"
 
 typedef struct camsrvdcamera
 {
@@ -48,6 +39,8 @@ typedef struct camsrvdcamera
 	pid_t pid;
 	int errcount;
 	bool disabled;
+	bool resetting;
+	time_t lastreset;
 	time_t laststart;
 } camera;
 
@@ -60,16 +53,14 @@ void load_settings(const string& filename);
 void setup_signal_handler();
 void handle_signal(int signum);
 
-void check_if_running_and_lock();
-void delete_lockfile();
-
 void become_daemon();
 
 void redirect_output_to_logger();
 void close_logger();
 
+void output_statistics();
+
 pid_t run_process(string cmdline);
 
 void posix_fail(string why, bool terminate);
-
 #endif
