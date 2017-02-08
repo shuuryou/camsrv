@@ -28,11 +28,13 @@ function AssertCallback($File, $Line /*, $expression*/)
 
 function ErrorCallback($Severity, $Message, $File, $Line)
 {
-	if (error_reporting() == 0) return;		
-	throw new ErrorException($Message, 0, $Severity, $File, $Line);
+	if (error_reporting() == 0) return;
+	printf('Unhandled %s ("%s") in %s on line %d.',
+			$Severity, $Message, $File, $Line);
+	exit(1);
 }
 
-function ExceptionCallback(Exception $Exception)
+function ExceptionCallback(Throwable $Exception)
 {
 	printf('Unhandled %s ("%s") in %s on line %d. Trace: %s',
 			get_class($Exception),
@@ -204,12 +206,12 @@ function Fix($String)
 function Template($Page, $PageTitle, array $Variables = array())
 {
 	$Page = strtolower($Page);
-	
+
 	$file = sprintf('template/%s.php', $Page);
-	
+
 	if (!file_exists($file))
 		throw new Exception('Template file "'. $Page .'" not found.');
-	
+
 	define ('CAMSRV', TRUE);
 
 	// These curly braces prevent variable scope pollution so that
@@ -219,20 +221,20 @@ function Template($Page, $PageTitle, array $Variables = array())
 		$SiteName = Fix(GetSetting('webinterface.title'));
 		$PageTitle = Fix($PageTitle);
 		$Menu = BuildCameraMenu();
-		
+
 		require_once('template/header.php');
 	}
-	
+
 	{
 		foreach ($Variables as $k => $v)
 			$$k = $v;
 		require_once($file);
 	}
-	
+
 	{
 		require_once('template/footer.php');
 	}
-	
+
 	ob_end_flush();
 	exit();
 }
@@ -246,14 +248,14 @@ function BuildCameraList()
 function BuildCameraMenu()
 {
 	$cameras = BuildCameraList(); // Not escaped
-	
+
 	$ret = array();
-	
+
 	$selectedcamera = null;
-	
+
 	if (!empty($_GET['camera']) && in_array($_GET['camera'], $cameras))
 		$selectedcamera = $_GET['camera'];
-		
+
 	foreach ($cameras as $camera)
 	{
 		$title = GetSetting($camera .'.title');
