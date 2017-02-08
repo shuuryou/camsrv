@@ -61,6 +61,7 @@ int main (int argc, char* const argv[])
 			abort(); // Must never happen
 		case -1:
 			LOG(LOG_ERR, "Could not create lock file.");
+			exit(1);
 		case  1: 
 			LOG(LOG_ERR, "Another instance is already running.");
 			exit(1);
@@ -88,7 +89,7 @@ int main (int argc, char* const argv[])
 		do_motion();
 	else if (m_Verbose)
 		LOG(LOG_DEBUG, "Motion detection is turned off.");
-		
+
 	LOG(LOG_NOTICE, "Maintenance has completed.");
 
 	return 0;
