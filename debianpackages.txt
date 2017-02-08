@@ -1,0 +1,11 @@
+Debian packages to install to run the binaries:
+
+# apt-get install ffmpeg libboost-filesystem1.55.0 libboost-program-options1.55.0 libboost-system1.55.0 libcv2.4 libopencv-calib3d2.4 libopencv-contrib2.4 libopencv-core2.4 libopencv-features2d2.4 libopencv-flann2.4 libopencv-gpu2.4 libopencv-highgui2.4 libopencv-imgproc2.4 libopencv-legacy2.4 libopencv-ml2.4 libopencv-objdetect2.4 libopencv-ocl2.4 libopencv-photo2.4 libopencv-stitching2.4 libopencv-superres2.4 libopencv-ts2.4 libopencv-video2.4 libopencv-videostab2.4
+
+Note that building from source requires more Debian packages:
+
+# apt-get install libboost-dev libboost-filesystem-dev libboost-program-options-dev libopencv-dev libopencv-video-dev cmake
+
+How to undo motion detection results:
+
+# rename 's/-MOTION-[0-9]+.mp4$/.mp4/' *.mp4
