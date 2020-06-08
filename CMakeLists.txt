@@ -10,9 +10,6 @@ link_directories(/usr/lib)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/bin/)
 
-# Villa-ART CamSrv march=nehalem
-# Our CamSrv       march=haswell
-
 set(CMAKE_CXX_FLAGS "-march=native -o3 -Wall -Wextra -fomit-frame-pointer -ffast-math -flto -s")
 set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS}")
 
