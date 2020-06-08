@@ -13,7 +13,7 @@ $cameras = BuildCameraList(); // Not escaped
 
 if (!empty($_GET['camera']))
 	$camera = $_GET['camera'];
-	
+
 if (!in_array($_GET['camera'], $cameras))
 {
 	http_response_code(404);
@@ -43,9 +43,9 @@ if (!$stream_enabled && $recording === NULL && count($recordings) > 0)
 	reset($recordings[$tmp1]);
 	$tmp2 = key($recordings[$tmp1]);
 	$tmp3 = $recordings[$tmp1][$tmp2];
-	
+
 	$recording = $tmp3['ID'];
-	
+
 	unset($tmp1);
 	unset($tmp2);
 	unset($tmp3);
@@ -54,7 +54,7 @@ if (!$stream_enabled && $recording === NULL && count($recordings) > 0)
 if ($recording !== NULL)
 {
 	$found = FALSE;
-	
+
 	foreach ($recordings as &$date)
 		foreach ($date as &$time)
 			if ($time['ID'] == $recording)
@@ -72,7 +72,7 @@ if ($recording !== NULL)
 	}
 }
 
-$pagetitle = Fix(GetSetting($camera .'.title'));
+$pagetitle = GetSetting($camera .'.title');
 
 $pagevars = array
 (
@@ -146,7 +146,7 @@ function CreateVideoList($Directory, $Extension, $URL)
 	{
 		// Array keys are escaped here; values are escaped in a second pass
 		$date = Fix(strftime($date_format, $file['Modified']));
-		
+
 		if ($prev_modified !== NULL)
 		{
 			$time = Fix(sprintf('%s - %s',
@@ -159,7 +159,7 @@ function CreateVideoList($Directory, $Extension, $URL)
 		}
 
 		$prev_modified = $file['Modified'];
-		
+
 		$ret[$date][$time] = array
 		(
 			'ID'	=> $file['Modified'],
@@ -168,12 +168,12 @@ function CreateVideoList($Directory, $Extension, $URL)
 		);
 		$last = $mtime;
 	}
-	
+
 	$ret = array_reverse($ret);
 
 	foreach ($ret as &$v)
 		$v = array_reverse($v);
-	
+
 	return $ret;
 }
 
