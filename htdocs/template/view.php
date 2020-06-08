@@ -23,17 +23,18 @@
 
 <?php if ($EnableStream || (!empty($Recording) && !empty($RecordingURL))) { ?>
 	<video id="video" class="video-js vjs-default-skin vjs-big-play-centered vjs-16-9"
-		data-setup='{"controls": <?php if ($EnableStream && empty($Recording)) { ?>false<?php } else { ?>true<?php } ?>, "responsive": true, "autoplay": true, "preload": "auto", "techOrder": ["html5", "flash"]}'>
+		data-setup='{"controls": <?php if ($EnableStream && empty($Recording)) { ?>false<?php } else { ?>true<?php } ?>, "responsive": true, "autoplay": true, "preload": "auto", "techOrder": ["html5"]}'>
 		<?php if (!empty($Recording) && !empty($RecordingURL)) { ?>
 			<source src="<?php echo $RecordingURL; ?>" type="video/mp4">
 		<?php } elseif ($EnableStream) { ?>
-			<source src="/live.php?camera=<?php echo $Camera; ?>" type="video/x-flv">
+			<source src="live.php?camera=<?php echo $Camera; ?>" type="video/mp4">
 		<?php } ?>
 		<p class="vjs-no-js">
 			Um die Aufzeichnungen anzusehen, müssen Sie JavaScript aktivieren
 			und einen Browser verwenden, der HTML5 oder Adobe Flash Player
-			unterstützt. Für die Anzeige des Live-Bildes wird Adobe Flash
-			Player benötigt.
+			unterstützt. Für die Anzeige des Live-Bildes wird die aktuellste
+			Version Ihres Browsers benötigt.　Microsoft Internet Explorer wird
+			nicht untersützt.
 		</p>
 	</video>
 	<script src="resource/video-js.js"></script>
