@@ -30,11 +30,10 @@
 			<source src="live.php?camera=<?php echo $Camera; ?>" type="video/mp4">
 		<?php } ?>
 		<p class="vjs-no-js">
-			Um die Aufzeichnungen anzusehen, müssen Sie JavaScript aktivieren
-			und einen Browser verwenden, der HTML5 oder Adobe Flash Player
-			unterstützt. Für die Anzeige des Live-Bildes wird die aktuellste
-			Version Ihres Browsers benötigt.　Microsoft Internet Explorer wird
-			nicht untersützt.
+			To view the recordings, you must enable JavaScript and use a
+			browser that supports HTML5 video. To view the live image,
+			you need the very latest version of your browser.
+			Microsoft Internet Explorer is not supported.
 		</p>
 	</video>
 	<script src="resource/video-js.js"></script>

@@ -1,7 +1,7 @@
 <?php if (!defined('CAMSRV')) die(); ?>
 
 <?php if (!$HeatmapEnabled) { ?>
-	<p class="center">Bitte wählen Sie eine Überwachungskamera aus der obigen Liste aus.</p>
+	<p class="center">Please select a camera form the list above.</p>
 <?php } else { ?>
 	<?php foreach ($Heatmap as $Entry) { ?>
 		<h3><?php echo $Entry['Title']; ?></h3>

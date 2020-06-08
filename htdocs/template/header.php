@@ -18,7 +18,7 @@
 		<div class="cameramenu pure-menu pure-menu-horizontal">
 			<ul class="pure-menu-list">
 				<li class="pure-menu-item <?php if (empty($Menu['SelectedCamera'])) { ?>pure-menu-selected<?php } ?>">
-					<a href="index.php" class="pure-menu-link">Übersicht</a>
+					<a href="index.php" class="pure-menu-link">Overview</a>
 				</li>
 				<?php foreach ($Menu['Cameras'] as $Camera) { ?>
 					<li class="pure-menu-item <?php if ($Camera['ID'] === $Menu['SelectedCamera']) { ?>pure-menu-selected<?php } ?>">
