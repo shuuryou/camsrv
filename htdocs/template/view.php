@@ -3,7 +3,7 @@
 	<div class="pure-u-1-5 left"><button id="previous" onclick="Previous('<?php echo $Camera; ?>');" class="pure-button pure-button-primary">&lt;&lt;</button></div>
 	<div class="pure-u-3-5 center pure-form ">
 		<select id="date" onchange="Go('<?php echo $Camera; ?>', this);">
-				<option <?php if (!$EnableStream) { ?>disabled<?php } ?> value="">Live-Bild</option>
+				<option <?php if (!$EnableStream) { ?>disabled<?php } ?> value="">Live View</option>
 			<?php foreach ($Recordings as $Date => &$Entries) { ?>
 				<optgroup label="<?php echo $Date; ?>">
 					<?php foreach($Entries as $Time => &$Entry) { ?>

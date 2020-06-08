@@ -37,7 +37,7 @@ if ($heatmap_enabled)
 	$pagevars['HeatmapColumns'] = HeatmapColumns();
 }
 
-Template('index', 'Übersicht', $pagevars);
+Template('index', 'Overview', $pagevars);
 
 function CreateHeatmap($Directory, $Extension)
 {
