@@ -10,7 +10,7 @@
  *
  * Nethertheless, thanks to Cédric Verstraeten for the general motion detection
  * algorithm, a mutation of which lives on in this code.
- * 
+ *
  */
 
 #ifndef MAINTENANCE_HPP

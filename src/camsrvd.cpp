@@ -43,7 +43,7 @@ int main(int argc, const char* argv[])
 			abort(); // Must never happen
 		case -1:
 			posix_fail("Could not create lock file.", true);
-		case  1: 
+		case  1:
 			fprintf(stderr, "Another instance is already running.\n");
 			exit(1);
 		case  0:
@@ -86,23 +86,23 @@ int main(int argc, const char* argv[])
 
 				printf("Camera \"%s\" with PID %d is no longer running. It has termined unexpectedly %d time(s) before.\n",
 					cam->name.c_str(), cam->pid, cam->errcount);
-				
+
 				if (cam->errcount >= m_MaxFailures)
 				{
 					cam->disabled = true;
 					printf("Camera \"%s\" has failed too many times and has been disabled.\n", cam->name.c_str());
 					notify_camera_disabled(*cam);
-					
+
 					continue; // for
 				}
-				
+
 				cam->resetting = true;
 				cam->lastreset = time(NULL);
 			}
 			else if (cam->resetting && now - cam->lastreset >= m_ResetTimer)
 			{
 				assert(cam->lastreset != (time_t)-1);
-				
+
 				printf("Attempting to recover camera \"%s\"...\n", cam->name.c_str());
 				cam->laststart = now;
 				cam->resetting = false;
@@ -114,20 +114,20 @@ int main(int argc, const char* argv[])
 				printf("Camera \"%s\"appears to be working fine again, so resetting error count.\n", cam->name.c_str());
 				cam->errcount = 0;
 			}
-			
+
 			all_cameras_disabled = false;
-			
+
 			if (cam->resetting || cam->errcount != 0)
 			{
 				// Figure out how long to sleep until something needs to
 				// be reset or restarted.
 				unsigned int tmp;
-				
+
 				if (cam->resetting)
 					tmp = (unsigned int)(m_ResetTimer - (now - cam->lastreset));
 				else if (cam->errcount != 0)
 					tmp = (unsigned int)(m_ResetTimer - (now - cam->laststart));
-				
+
 				if (sleep_time == 0)
 					sleep_time = tmp;
 				else
@@ -140,7 +140,7 @@ int main(int argc, const char* argv[])
 			printf("All cameras have become disabled. There is nothing left to do.\n");
 			break; // while
 		}
-		
+
 		if (sleep_time == 0)
 		{
 			printf("Suspending until something happens.\n");
@@ -150,7 +150,7 @@ int main(int argc, const char* argv[])
 		else
 		{
 			printf("Sleeping for %d seconds or less.\n", sleep_time);
-			sleep(sleep_time); 
+			sleep(sleep_time);
 			printf("Woke up from sleep.\n");
 		}
 	}
@@ -159,11 +159,11 @@ int main(int argc, const char* argv[])
 	// processes up to 10 times, waiting 5 seconds between attempts.
 	bool send_sigkill = false;
 	bool terminated_something;
-	
+
 	for (int sentinel = 10; sentinel >= 0; sentinel--)
 	{
 		terminated_something = false;
-		
+
 		for (vector<camera>::iterator cam = m_Cameras.begin() ; cam != m_Cameras.end(); ++cam)
 		{
 			if (cam->disabled)
@@ -186,18 +186,18 @@ int main(int argc, const char* argv[])
 				if (kill(cam->pid, SIGTERM) == -1)
 					posix_fail("Unable to terminate process.", false);
 			}
-			
+
 			terminated_something = true;
 		}
-		
+
 		if (!terminated_something) // We are done!
 			break; // for
-		
+
 		printf("Giving all camera processes some time to exit.\n");
 
 		for (uint remaining = 5; remaining > 0;)
 			remaining = sleep(remaining);
-		
+
 		 // If we sent SIGTERM, the next round is with SIGKILL
 		if (!send_sigkill) send_sigkill = true;
 	}
@@ -214,13 +214,13 @@ void notify_camera_disabled(const camera camdis)
 	// that the code is solid.
 
 	pid_t pid = fork();
-	
+
 	if (pid == -1)
 	{
 		posix_fail("Could not fork to execute sendmail.", false);
 		return;
 	}
-	
+
 	if (pid == 0)
 	{
 		/* Child here */
@@ -231,7 +231,7 @@ void notify_camera_disabled(const camera camdis)
 			posix_fail("Could not execute sendmail to send an alert.", true);
 
 		signal(SIGPIPE, SIG_IGN);
-		
+
 		char hname[256];
 		gethostname(hname, sizeof(hname));
 
@@ -250,10 +250,10 @@ void notify_camera_disabled(const camera camdis)
 		fprintf(mp, "Apologies for any inconvenience this may cause. For resolving any issues I can only say, Godspeed.\n");
 
 		pclose(mp);
-		
+
 		exit(0);
 	}
-	
+
 	/* Parent here */
 	int retval;
 	waitpid(pid, &retval, 0);
@@ -383,7 +383,7 @@ void load_settings(const string& filename)
 		cam.disabled = false;
 		cam.resetting = false;
 		cam.lastreset = (time_t)-1;
-		cam.laststart = (time_t)-1; 
+		cam.laststart = (time_t)-1;
 
 		m_Cameras.push_back(cam);
 	}
@@ -584,15 +584,15 @@ void output_statistics()
 {
 	char buf[255], buf2[255];
 	struct tm *info;
-	
+
 	for (vector<camera>::iterator cam = m_Cameras.begin() ; cam != m_Cameras.end(); ++cam)
 	{
 		info = localtime(&cam->lastreset);
 		strftime(buf, 255,"%x %X", info);
-		
+
 		info = localtime(&cam->laststart);
 		strftime(buf2, 255,"%x %X", info);
-		
+
 		printf("Camera \"%s\" - Command: \"%s\", PID: %d, Error count: %d, Disabled? %s, Resetting? %s, Last reset: %s, Last start: %s.\n",
 			cam->name.c_str(), cam->command.c_str(), cam->pid, cam->errcount,
 			cam->disabled ? "Yes" : "No",
