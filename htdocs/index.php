@@ -1,145 +1,145 @@
 <?php
-/*
- * Web Interface for Camera Recordings
- *
- */
+require_once 'init.php';
 
-require_once('init.php');
-
-$heatmap_enabled = intval(GetSetting('webinterface.enableheatmap')) == 1;
+$heatmap_enabled = intval(getSetting('webinterface.enableheatmap')) == 1;
 
 $pagevars = array
 (
-	'HeatmapEnabled' => $heatmap_enabled
+    'HeatmapEnabled' => $heatmap_enabled
 );
 
-if ($heatmap_enabled)
-{
-	$cameras = BuildCameraList(); // Not escaped
+if ($heatmap_enabled) {
+    $cameras = buildCameraList(); // Not escaped
 
-	$Heatmap = array();
-	foreach ($cameras as $camera)
-	{
-		$recordings = GetSetting($camera .'.destination');
-		$extension = pathinfo(GetSetting('camsrvd.filenametpl'), PATHINFO_EXTENSION);
+    $Heatmap = array();
+    foreach ($cameras as $camera) {
+        $recordings = getSetting($camera .'.destination');
+        $extension = pathinfo(getSetting('camsrvd.filenametpl'), PATHINFO_EXTENSION);
 
-		$entry = array
-		(
-			'Camera'	=> Fix($camera),
-			'Title'		=> Fix(GetSetting($camera .'.title')),
-			'Data'		=> CreateHeatmap($recordings, $extension) // Escapes itself
-		);
+        $entry = array
+        (
+        'Camera' => fix($camera),
+        'Title' => fix(getSetting($camera .'.title')),
+        'Data' => createHeatmap($recordings, $extension) // Escapes itself
+        );
 
-		$Heatmap[] = $entry;
-	}
+        $Heatmap[] = $entry;
+    }
 
-	$pagevars['Heatmap'] = $Heatmap;
-	$pagevars['HeatmapColumns'] = HeatmapColumns();
+    $pagevars['Heatmap'] = $Heatmap;
+    $pagevars['HeatmapColumns'] = heatmapColumns();
 }
 
-Template('index', 'Overview', $pagevars);
+template('index', 'Overview', $pagevars);
 
-function CreateHeatmap($Directory, $Extension)
+function createHeatmap($Directory, $Extension)
 {
-	$Extension = strtolower($Extension);
+    $Extension = strtolower($Extension);
 
-	$dh = opendir($Directory);
+    $dh = opendir($Directory);
 
-	$files = array();
+    $files = array();
 
-	for (;;)
-	{
-		$current = readdir($dh);
+    for (;;) {
+        $current = readdir($dh);
 
-		if ($current === FALSE)
-			break;
+        if ($current === false) {
+            break;
+        }
 
-		$fileext = pathinfo($current, PATHINFO_EXTENSION);
+        $fileext = pathinfo($current, PATHINFO_EXTENSION);
 
-		if (strtolower($fileext) !== $Extension)
-			continue;
+        if (strtolower($fileext) !== $Extension) {
+            continue;
+        }
 
-		if (!preg_match('/-MOTION-([0-9]+)/', $current, $motion))
-			continue;
+        if (!preg_match('/-MOTION-([0-9]+)/', $current, $motion)) {
+            continue;
+        }
 
-		$motion = $motion[1];
+        $motion = $motion[1];
 
-		$file = $Directory .'/'. $current;
+        $file = $Directory .'/'. $current;
 
-		if (!is_file($file))
-			continue;
+        if (!is_file($file)) {
+            continue;
+        }
 
-		$mtime = filemtime($file);
+        $mtime = filemtime($file);
 
-		if (time() - $mtime < 10)
-			continue; // File is still being written to
+        if (time() - $mtime < 10) {
+            continue; // File is still being written to
+        }
 
-		$files[] = array('Modified' => $mtime, 'Motion' => $motion);
-	}
+        $files[] = array('Modified' => $mtime, 'Motion' => $motion);
+    }
 
-	closedir($dh);
+    closedir($dh);
 
-	uasort($files, 'VideoArrayForHeatmapSortFunction');
+    uasort($files, 'videoArrayForHeatmapSortFunction');
 
-	/* ---------------------------------------------------- */
+    /* ---------------------------------------------------- */
 
-	$date_format = GetSetting('webinterface.dateformatheatmap');
-	$time_format = GetSetting('webinterface.timeformatheatmap');
+    $date_format = getSetting('webinterface.dateformatheatmap');
+    $time_format = getSetting('webinterface.timeformatheatmap');
 
-	$columns = HeatmapColumns(); // Gets escaped by function
+    $columns = heatmapColumns(); // Gets escaped by function
 
-	$ret = array();
+    $ret = array();
 
-	foreach ($files as &$file)
-	{
-		// Array keys are escaped here; values are escaped in a second pass
-		$date = Fix(strftime($date_format, $file['Modified']));
-		$time = Fix(strftime($time_format, round($file['Modified'] / 3600) * 3600));
-		
-		if (!isset($ret[$date]))
-		{
-			foreach ($columns as $col)
-				$ret[$date][$col] = array
-				(
-					'FirstID'	=> NULL,
-					'Motion'	=> 0,
-					'Color'		=> NULL
-				);
-		}
+    foreach ($files as &$file) {
+        // Array keys are escaped here; values are escaped in a second pass
+        $date = fix(strftime($date_format, $file['Modified']));
+        $time = fix(strftime($time_format, round($file['Modified'] / 3600) * 3600));
 
-		$ret[$date][$time]['Motion'] += $file['Motion'];
-		
-		// The modification date is used as an ID of sorts
-		if ($ret[$date][$time]['FirstID'] === NULL && $file['Modified'] > 0)
-			$ret[$date][$time]['FirstID'] = $file['Modified'];
-	}
-	
-	// Array keys were escaped above
-	foreach ($ret as &$v)
-		foreach ($v as &$w)
-		{
-			$w['Color'] = Fix(GetHeatmapColor($w['Motion']));
-			$w['Motion'] = Fix(number_format($w['Motion'], 0));
-			$w['FirstID'] = Fix($w['FirstID']);
-		}
-		
-	return $ret;
+        if (!isset($ret[$date])) {
+            foreach ($columns as $col) {
+                $ret[$date][$col] = array
+                (
+                    'FirstID' => null,
+                    'Motion' => 0,
+                    'Color' => null
+                );
+            }
+        }
+
+        $ret[$date][$time]['Motion'] += $file['Motion'];
+
+        // The modification date is used as an ID of sorts
+        if ($ret[$date][$time]['FirstID'] === null && $file['Modified'] > 0) {
+            $ret[$date][$time]['FirstID'] = $file['Modified'];
+        }
+    }
+
+    // Array keys were escaped above
+    foreach ($ret as &$v) {
+        foreach ($v as &$w) {
+            $w['Color'] = fix(GetHeatmapColor($w['Motion']));
+            $w['Motion'] = fix(number_format($w['Motion'], 0));
+            $w['FirstID'] = fix($w['FirstID']);
+        }
+    }
+
+    return $ret;
 }
 
-function VideoArrayForHeatmapSortFunction(array $a, array $b)
+function videoArrayForHeatmapSortFunction(array $a, array $b)
 {
-	if ($a['Modified'] == $b['Modified']) return 0;
-	return ($a['Modified'] < $b['Modified']) ? -1 : 1;
+    if ($a['Modified'] == $b['Modified']) {
+        return 0;
+    }
+    return ($a['Modified'] < $b['Modified']) ? -1 : 1;
 }
 
-function HeatmapColumns()
+function heatmapColumns()
 {
-	$time_format = GetSetting('webinterface.timeformatheatmap');
+    $time_format = getSetting('webinterface.timeformatheatmap');
 
-	$ret = array();
+    $ret = array();
 
-	for ($i = 0; $i < 24; $i++)
-		$ret[] = Fix(gmstrftime($time_format, 3600 * $i));
-	
-	return $ret;
+    for ($i = 0; $i < 24; $i++) {
+        $ret[] = fix(gmstrftime($time_format, 3600 * $i));
+    }
+
+    return $ret;
 }

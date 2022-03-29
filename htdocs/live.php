@@ -1,51 +1,44 @@
 <?php
-/*
- * Web Interface for Camera Recordings
- *
- */
+require_once 'init.php';
 
-require_once('init.php');
+$Enabled = intval(getSetting('webinterface.enablestream'));
 
-$Enabled = intval(GetSetting('webinterface.enablestream'));
-
-if ($Enabled !== 1)
-{
-	http_response_code(403);
-	echo 'Live streaming is disabled.';
-	return;
+if ($Enabled !== 1) {
+    http_response_code(403);
+    echo 'Live streaming is disabled.';
+    return;
 }
 
-$cameras = BuildCameraList(); // Not escaped
+$cameras = buildCameraList(); // Not escaped
 
-if (!empty($_GET['camera']))
-	$camera = $_GET['camera'];
-	
-if (!in_array($_GET['camera'], $cameras))
-{
-	http_response_code(404);
-	echo 'Camera does not exist.';
-	return;
+if (!empty($_GET['camera'])) {
+    $camera = $_GET['camera'];
 }
 
-$stream = GetSetting($camera .'.livestream');
-
-if (empty($stream))
-	$stream = GetSetting($camera .'.stream');
-
-if (empty($stream))
-{
-	http_response_code(500);
-	echo 'H264 stream for camera is missing.';
-	return;
+if (!in_array($_GET['camera'], $cameras)) {
+    http_response_code(404);
+    echo 'Camera does not exist.';
+    return;
 }
 
-$command = GetSetting('webinterface.streamcommand');
+$stream = getSetting($camera .'.livestream');
 
-if (empty($command))
-{
-	http_response_code(500);
-	echo 'Grabber command for web interface is missing.';
-	return;
+if (empty($stream)) {
+    $stream = getSetting($camera .'.stream');
+}
+
+if (empty($stream)) {
+    http_response_code(500);
+    echo 'H264 stream for camera is missing.';
+    return;
+}
+
+$command = getSetting('webinterface.streamcommand');
+
+if (empty($command)) {
+    http_response_code(500);
+    echo 'Grabber command for web interface is missing.';
+    return;
 }
 
 $command = str_replace('{STREAM}', escapeshellarg($stream), $command);
