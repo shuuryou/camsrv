@@ -60,7 +60,7 @@ int main(int argc, char* const argv[])
 
 		if (!mask_file.empty() && filesystem::exists(mask_file))
 		{
-			mask = imread(mask_file, CV_LOAD_IMAGE_GRAYSCALE);
+			mask = imread(mask_file, IMREAD_GRAYSCALE);
 
 			if (mask.empty())
 			{
@@ -83,7 +83,7 @@ int main(int argc, char* const argv[])
 	}
 
 	printf("Applying mask to first frame...");
-	cvtColor(frame, frame, CV_RGB2GRAY);
+	cvtColor(frame, frame, COLOR_RGB2GRAY);
 	try_apply_mask(frame, mask);
 	printf(" OK.\n");
 

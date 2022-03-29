@@ -10,7 +10,7 @@
  *
  * Nethertheless, thanks to Cédric Verstraeten for the general motion detection
  * algorithm, a mutation of which lives on in this code.
- * 
+ *
  */
 
 #include "maintenance.hpp"
@@ -29,16 +29,16 @@ int main (int argc, char* const argv[])
 
 	m_Verbose = false;
 
-	while ((opt = getopt(argc, argv, "c:sv")) != EOF)	
+	while ((opt = getopt(argc, argv, "c:sv")) != EOF)
 		switch(opt)
 		{
-			case 's': 
+			case 's':
 				m_Syslog = true;
 				break;
-			case 'c': 
+			case 'c':
 				configfile = optarg;
 				break;
-			case 'v': 
+			case 'v':
 				m_Verbose = true;
 				break;
 			case '?':
@@ -52,7 +52,7 @@ int main (int argc, char* const argv[])
 		openlog(SYSLOG_IDENT, LOG_CONS, LOG_LOCAL0);
 		atexit(closelog);
 	}
-	
+
 	int lock_status = check_if_running_and_lock(LOCKFILE);
 
 	switch (lock_status)
@@ -62,7 +62,7 @@ int main (int argc, char* const argv[])
 		case -1:
 			LOG(LOG_ERR, "Could not create lock file.");
 			exit(1);
-		case  1: 
+		case  1:
 			LOG(LOG_ERR, "Another instance is already running.");
 			exit(1);
 		case  0:
@@ -117,7 +117,7 @@ void do_delete()
 	uintmax_t totalbytes = 0;
 
 	for (vector<camera>::iterator cam = m_Cameras.begin() ; cam != m_Cameras.end(); ++cam)
-	{	
+	{
 		struct tm cutoff_tm;
 		time_t cutoff = time(NULL);
 
@@ -126,7 +126,7 @@ void do_delete()
 		cutoff_tm.tm_min = 0;
 		cutoff_tm.tm_hour = 0;
 
-		cutoff = mktime(&cutoff_tm);		
+		cutoff = mktime(&cutoff_tm);
 		cutoff -= (86400 * cam->deleteafterdays);
 
 		assert(cutoff > 0);
@@ -193,13 +193,13 @@ void do_motion()
 		{
 			filesystem::path cur_path = dir->path();
 			dir++;
-			
+
 			if (filesystem::is_symlink(cur_path))
 			{
 				LOG(LOG_WARNING, "Encountered a symbolic link (\"%s\").", cur_path.string().c_str());
 				abort();
 			}
-			
+
 			time_t modification_time = filesystem::last_write_time(cur_path);
 
 			if (time(NULL) - modification_time < 60)
@@ -214,7 +214,7 @@ void do_motion()
 
 			size_t string_pos = cur_path.string().find("-MOTION");
 
-			if (string_pos != string::npos) 
+			if (string_pos != string::npos)
 			{
 				if (m_Verbose)
 				{
@@ -223,27 +223,27 @@ void do_motion()
 				}
 				continue;
 			}
-			
+
 			if (m_Verbose)
 			{
 				LOG(LOG_DEBUG, "Queueing \"%s\" for processing.",
 					cur_path.string().c_str());
 			}
-			
+
 			files.insert(pair<time_t, pair<filesystem::path, camera> >(modification_time,
 				pair<filesystem::path, camera>(cur_path, *cam)));
 		}
 	}
-	
+
 	LOG(LOG_NOTICE, "Motion detection will now process %d video file(s).", files.size());
-	
+
 	for (multimap<time_t, pair<filesystem::path, camera> >::iterator it = files.begin(); it != files.end(); ++it)
 	{
 		const time_t detection_start = time(NULL);
-		
+
 		const filesystem::path path = (it->second).first;
 		const camera cam = (it->second).second;
-		
+
 		if (m_Verbose)
 			LOG(LOG_DEBUG, "Processing video file \"%s\".", path.string().c_str());
 
@@ -253,7 +253,7 @@ void do_motion()
 		{
 			LOG(LOG_WARNING, "Motion detection failed for video file (\"%s\").",
 				path.string().c_str());
-				
+
 			return;
 		}
 
@@ -270,17 +270,17 @@ void do_motion()
 		free(filename_buffer);
 
 		filesystem::rename(path, new_path);
-		
+
 		const time_t detection_end = time(NULL);
 
 		LOG(LOG_INFO, "Motion detection result for video file \"%s\" was %d. Determined in %d second(s).",
 			path.string().c_str(), motion_detected, (detection_end - detection_start));
 	}
-	
+
 	files.clear();
-	
+
 	const time_t overall_end = time(NULL);
-	
+
 	LOG(LOG_NOTICE, "Motion detection has completed in %d second(s).",
 		(overall_end - overall_start));
 }
@@ -336,7 +336,7 @@ void load_settings(const string& filename)
 		int deleteafterdays, motionsensitivity, motionmaxdeviation, motioncontinuation;
 		string motionmaskbitmap, destination;
 		Mat motionmask;
-		
+
 		try
 		{
 			deleteafterdays = pt.get<int>(*el + ".deleteafterdays");
@@ -363,14 +363,14 @@ void load_settings(const string& filename)
 					motionmaskbitmap.c_str(), (*el).c_str());
 				exit(1);
 			}
-			
+
 			/*
 			 * Use the "makemask" program to create and test masks. Masks work
 			 * like everywhere else (white = include, black = exclude). Run
 			 * "makemask" without arguments for further information.
 			 */
 
-			motionmask = imread(motionmaskbitmap, CV_LOAD_IMAGE_GRAYSCALE);
+			motionmask = imread(motionmaskbitmap, IMREAD_GRAYSCALE);
 
 			if (motionmask.empty())
 			{
@@ -415,15 +415,15 @@ int video_motion_detection(const string& videofile, const camera& cam)
 	Mat prev_frame, current_frame, next_frame;
 
 	capture >> prev_frame;
-	cvtColor(prev_frame, prev_frame, CV_RGB2GRAY);
+	cvtColor(prev_frame, prev_frame, COLOR_RGB2GRAY);
 	try_apply_mask(prev_frame, cam.mask);
 
 	capture >> current_frame;
-	cvtColor(current_frame, current_frame, CV_RGB2GRAY);
+	cvtColor(current_frame, current_frame, COLOR_RGB2GRAY);
 	try_apply_mask(current_frame, cam.mask);
 
 	capture >> next_frame;
-	cvtColor(next_frame, next_frame, CV_RGB2GRAY);
+	cvtColor(next_frame, next_frame, COLOR_RGB2GRAY);
 	try_apply_mask(next_frame, cam.mask);
 
 	// d1 and d2 for calculating the differences
@@ -444,7 +444,7 @@ int video_motion_detection(const string& videofile, const camera& cam)
 		current_frame = next_frame;
 
 		capture.retrieve(next_frame);
-		cvtColor(next_frame, next_frame, CV_RGB2GRAY);
+		cvtColor(next_frame, next_frame, COLOR_RGB2GRAY);
 		try_apply_mask(next_frame, cam.mask);
 
 		// Calculate the difference between the images and then do a bitwise AND.
@@ -458,22 +458,22 @@ int video_motion_detection(const string& videofile, const camera& cam)
 		d1.release();
 		d2.release();
 
-		threshold(motion, motion, 35, 255, CV_THRESH_BINARY);
+		threshold(motion, motion, 35, 255, THRESH_BINARY);
 		erode(motion, motion, erode_kernel);
-		
+
 		/*
 		 * The verbose output here will be something like
-		 * 
+		 *
 		 * [...]
 		 * C0,C0,C0,C0,C0,C49,S1/3,C44,S2/3,C2,A,C64,S1/3,C67,S2/3,C9,A,
 		 * C2,C0,C0,C0,C0,C115,S1/3,C136,S2/3,C134,S3/3,
 		 * --- MOTION AT 127s ---
 		 * C19,A,C18,C1,C0,C0,
 		 * [...]
-		 * 
+		 *
 		 * The number after 'C' represents the number of changed pixels
 		 * between the previous, current, and next frame.
-		 * 
+		 *
 		 * If the 'C' number is greater than the "motionsensitivity"
 		 * setting, the program will start counting the frame sequence
 		 * ("motioncontinuation" setting) and you will get an 'S' with
@@ -481,20 +481,20 @@ int video_motion_detection(const string& videofile, const camera& cam)
 		 * had had enough changed pixels. The second is how many frames
 		 * with enough changes in pixels must occur in total before
 		 * whatever is happening is actually considered to be motion.
-		 * 
+		 *
 		 * Once 'S' matches (e.g. 'S3/3' above), you will receive a
 		 * "--- MOTION AT [...]s---" message with the video offset
 		 * in seconds where motion occurred. These are limited to one
 		 * message per second with motion.
-		 * 
+		 *
 		 * An 'A' means that motion has stopped; i.e. there were not
 		 * enough changed pixels anymore and therefore frame counting
 		 * was aborted.
-		 * 
+		 *
 		 * At the very the end, you get a log message like:
-		 * 
+		 *
 		 * INFO: Motion detection result for video file "[...]" was 18.
-		 * 
+		 *
 		 * The number at the end of this message indicates how many
 		 * times motion according to the configured parameters has
 		 * occurred in total for this video file.
@@ -502,7 +502,7 @@ int video_motion_detection(const string& videofile, const camera& cam)
 		 * Unfortunately, for the time being, running this program in
 		 * verbose mode is the only way to test changes made to the
 		 * motion detection settings made in the "camsrv.ini" file.
-		 */ 
+		 */
 
 		int number_of_changes =
 			detect_motion(motion, cam.motionmaxdeviation);
@@ -514,7 +514,7 @@ int video_motion_detection(const string& videofile, const camera& cam)
 		// If there are not enough changes over a large enough number of
 		// frames, do not consider it to be motion. Otherwise, consider
 		// it to be motiom and act on it.
-	
+
 		if(number_of_changes < cam.motionsensitivity)
 		{
 			if (number_of_sequence != 0)
@@ -531,8 +531,8 @@ int video_motion_detection(const string& videofile, const camera& cam)
 		if (m_Verbose) cout << 'S' << number_of_sequence << '/' << cam.motioncontinuation << ',' << flush;
 
 		if(number_of_sequence >= cam.motioncontinuation)
-		{ 
-			int pos = capture.get(CV_CAP_PROP_POS_MSEC) / 1000;
+		{
+			int pos = capture.get(CAP_PROP_POS_MSEC) / 1000;
 
 			if (pos > last_motion_at)
 			{
@@ -569,7 +569,7 @@ inline int detect_motion(const Mat& frame, int maxdeviation)
 		return 0;
 
 	return countNonZero(frame == 255);
-	
+
 	/* The old code below is slower than using OpenCV's built-in way
 	 * by about four seconds in verbose mode.
 	 *
@@ -627,13 +627,13 @@ void LOG(int priority, const char *format, ...)
 	if (m_Syslog)
 	{
 		va_list arglist;
-		
+
 		va_start(arglist, format);
 		vsyslog(priority, format, arglist);
 		va_end(arglist);
 		return;
 	}
-	
+
 	string loglevel;
 
 	switch(priority)
