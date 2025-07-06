@@ -1,0 +1,89 @@
+; Sample configuration file for IP Camera Web Viewer
+; Copy this to /etc/camsrv.ini and adjust to your setup
+;
+; Notes:
+; - The RTSP URLs above are examples and WILL NOT work with your cameras
+; - You must find the correct RTSP URL for your specific camera model
+; - Test your RTSP URLs with VLC or ffplay before configuring here;
+;
+
+[webinterface]
+; Which cameras may be shown on the web interface?
+; This should be a comma-separated list of camera IDs from the sections below
+cameras=cam01,cam02,cam03
+
+; The title text to display on the web interface
+title=Camera Browser
+
+; Settings that control the display of dates and times
+; The language of the web interface is always English in this version
+locale=en_US.UTF-8
+dateformatcombobox=%a, %d.%m.%Y
+timeformatcombobox=%H:%M
+dateformatheatmap=%a, %d.%m.
+timeformatheatmap=%H
+
+; Set to 1 to enable the heatmap on the homepage
+; This requires motion detection data in the filenames (see README)
+; May be slow if you have a large number of cameras and recordings
+enableheatmap=0
+
+; Define a color scheme for the heatmap. Values in between will get
+; interpolated automatically. Format is VALUE:HEXCOLOR. Separator is
+; a pipe character. You can define as many colors as you want. VALUE
+; is the total amount of motion units in the given time slot.
+heatmapcolors=0:FFFFFF|200:F7B7B8|400:E1A0AD|600:BD5E71|800:BD3853|1000:BD0026
+
+; Set to 1 to enable live streaming
+; Enabling this will cause one ffmpeg grabber to be launched for every
+; visitor that is streaming. Make sure your server can handle the load.
+enablestream=1
+
+; The ffmpeg grabber command that is used for live streaming
+; Your cameras MUST support native H264/H265 video streaming
+; On-the-fly transcoding is extremely slow and will cause substantial
+; buffering and/or dropped frames, in addition to high CPU load
+; Specify {STREAM} where the stream URL of the camera should go
+streamcommand=/usr/bin/ffmpeg -v quiet -threads auto -i {STREAM} -c:v copy -an -movflags frag_keyframe+empty_moov -f mp4 -
+
+[camsrvd]
+; Legacy setting for filename template - kept for compatibility
+; This is used by the web interface to parse recording filenames
+; The following strftime modifiers should be used with ffmpeg's -strftime option
+filenametpl=%Y%m%d_%H%M%S.mp4
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Individual Camera Configurations     ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Copy these sections for each camera you want to add
+; Each section ID (e.g. [cam01]) must match what you put in webinterface.cameras
+
+[cam01]
+; The title of the camera for display purposes on the web interface
+title=Front Door
+
+; How to reach recordings (destination folder) via the local webserver
+; This should match your Apache alias configuration
+localurl=/video/cam01
+
+; How to reach the H264/H265 stream of the camera
+; Any stream supported by ffmpeg is supported here
+; ADJUST THIS TO YOUR CAMERA'S ACTUAL RTSP URL!
+stream=rtsp://192.168.1.201:554/user=admin&password=&channel=1&stream=0.sdp
+
+; The directory containing recorded video files
+; This gets combined with the "camsrvd.filenametpl" setting
+destination=/mnt/cameras/cam01/
+
+[cam02]
+title=Garage
+localurl=/video/cam02
+stream=rtsp://192.168.1.202:554/user=admin&password=&channel=1&stream=0.sdp
+destination=/mnt/cameras/cam02/
+
+[cam03]
+title=Backyard
+localurl=/video/cam03
+stream=rtsp://192.168.1.203:554/user=admin&password=&channel=1&stream=0.sdp
+destination=/mnt/cameras/cam03/
