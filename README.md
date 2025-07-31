@@ -110,7 +110,7 @@ User=cameras
 Group=cameras
 
 # Adjust as necessary if you want to keep more than 5 days of recordings, etc.
-ExecStart=/usr/bin/find /mnt/cameras/ -mindepth 1 -not -path '/mnt/cameras/lost+found/*' -not -path '/mnt/cameras/lost+found' -mtime +5 -delete -print
+ExecStart=/usr/bin/find /mnt/cameras/ -mindepth 1 -name 'lost+found' -prune -o -mtime +5 -exec rm -f {} \; -print
 ```
 
 4. **Create cleanup timer** (`/etc/systemd/system/ffmpeg-cleanup.timer`):
